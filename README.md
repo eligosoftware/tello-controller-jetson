@@ -1,6 +1,6 @@
 # Tello Control App with GUI
 
-This app is designed to control Tello drone from PC / laptop over WiFi connection and view the camera video. It can be run both on Linux and Windows computers.
+This app is designed to control Tello drone from Nvidia's Jetson Nano / Xavier devices over WiFi connection and view the camera video.
 
 ##  Installation
 Before running ensure that the following python libraries are present in your system:
@@ -8,6 +8,10 @@ Before running ensure that the following python libraries are present in your sy
 - Tkinter
 - opencv
 - pillow
+
+Ensure that Jetson Inference is installed and SSD-Mobilenet-V2 model downloaded. For more information see the following links:
+[https://github.com/dusty-nv/jetson-inference](https://github.com/dusty-nv/jetson-inference)<br>
+[https://github.com/dusty-nv/jetson-inference/blob/master/docs/building-repo-2.md](https://github.com/dusty-nv/jetson-inference/blob/master/docs/building-repo-2.md)
 
 Tello-python installation (Windows)
 
