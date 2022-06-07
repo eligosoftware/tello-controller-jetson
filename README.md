@@ -1,4 +1,4 @@
-# Tello Control App with GUI
+# Tello Control and Object Detection / Tracking App with GUI
 
 This app is designed to control Tello drone from Nvidia's Jetson Nano / Xavier devices over WiFi connection and view the camera video.
 
@@ -13,13 +13,6 @@ Ensure that Jetson Inference is installed and SSD-Mobilenet-V2 model downloaded.
 [https://github.com/dusty-nv/jetson-inference](https://github.com/dusty-nv/jetson-inference)<br>
 [https://github.com/dusty-nv/jetson-inference/blob/master/docs/building-repo-2.md](https://github.com/dusty-nv/jetson-inference/blob/master/docs/building-repo-2.md)
 
-Tello-python installation (Windows)
-
-```bash
->> git clone https://github.com/harleylara/tello-python.git
->> cd tello-python
->> python setup.py install `
-```
 Tello-python installation (Linux)
 
 ```bash
@@ -54,36 +47,35 @@ or
 pip install tk
 ```
 
-#### !!Important!!
-On Windows PCs check firewall settings for TCP and UDP port blocking.
-
-![firewall_settings_3.png](https://github.com/eligosoftware/tello-controller/blob/main/readme_images/firewall_settings_3.png?raw=true)
-
-![firewall_settings_1.png](https://github.com/eligosoftware/tello-controller/blob/main/readme_images/firewall_settings_1.png?raw=true)
-
-![firewall_settings_2.png](https://github.com/eligosoftware/tello-controller/blob/main/readme_images/firewall_settings_2.png?raw=true)
-
 ## Running
 
 ```bash
-git clone https://github.com/eligosoftware/tello-controller.git
-cd tello-controller
+git clone https://github.com/eligosoftware/tello-controller-jetson.git
+cd tello-controller-jetson
 python main.py
 ```
 
 ## Settings
 
-In the Settings menu it is possible to set the drone IP address, movement and angle step values. The standard IP is 192.168.10.1 for the station mode. User should change the IP if the drone is in AP mode. Move and angle step affect the drone movement behaviour. See more in Control part. The new settings take place only when the app is launched again.
+In the Settings menu it is possible to set the drone IP address, movement and angle step values. The standard IP is 192.168.10.1 for the station mode. User should change the IP if the drone is in AP mode. Move and angle step affect the drone movement behaviour. See more in Control part. Detection object can be choosen out of 91 trained objects from COCO dataset ([https://tech.amikelive.com/node-718/what-object-categories-labels-are-in-coco-dataset/](https://tech.amikelive.com/node-718/what-object-categories-labels-are-in-coco-dataset/)). P, I and D values affect the object tracking behaviour. The stable values found out after experiments are:
 
-![settings_1.png](https://github.com/eligosoftware/tello-controller/blob/main/readme_images/settings_1.png?raw=true)
+- P = 0.3	
+- I = 0
+- D = 0.2
 
-![settings_2.png](https://github.com/eligosoftware/tello-controller/blob/main/readme_images/settings_2.png?raw=true)
+You can read more about PID controller here: [https://en.wikipedia.org/wiki/PID_controller](https://en.wikipedia.org/wiki/PID_controller)
+
+The new settings take place only when the app is launched again.
+
+![settings_1.png](https://github.com/eligosoftware/tello-controller-jetson/blob/main/readme_images/settings_1.png?raw=true)
+
+![settings_2.png](https://github.com/eligosoftware/tello-controller-jetson/blob/main/readme_images/settings_2.png?raw=true)
 
 ## Control
 
 Control window enables Tello drone control using pre-configured buttons
 
-![control.png](https://github.com/eligosoftware/tello-controller/blob/main/readme_images/control.png?raw=true)
+![control.png](https://github.com/eligosoftware/tello-controller-jetson/blob/main/readme_images/control.png?raw=true)
 
 - Up  - move drone vertically up by move step value
 - Down  - move drone vertically down by move step value
@@ -96,3 +88,7 @@ Control window enables Tello drone control using pre-configured buttons
 - Move left  - move drone left by move step value
 - Move right  - move drone right by move step value
 - Land  - perform drone landing
+
+## Video
+
+[https://en.wikipedia.org/wiki/PID_controller](https://en.wikipedia.org/wiki/PID_controller)
