@@ -1,0 +1,1 @@
+{"tello_ip": "192.168.10.1", "object_to_track": "person", "p": 0.3, "i": 0.0, "d": 0.2, "move_step": 40, "angle_step": 40}
