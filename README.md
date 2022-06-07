@@ -1,6 +1,6 @@
 # Tello Control and Object Detection / Tracking App with GUI
 
-This app is designed to control Tello drone from Nvidia's Jetson Nano / Xavier devices over WiFi connection and view the camera video.
+This app is designed to control Tello drone from Nvidia's Jetson Nano / Xavier devices over WiFi connection and view the camera video. The project was completed with the technical and informational support of IoTLab at the Rhine-Waal University of Applied Sciences and its teaching staff [https://www.hochschule-rhein-waal.de/en/faculties/communication-and-environment/laboratories/iot-lab](https://www.hochschule-rhein-waal.de/en/faculties/communication-and-environment/laboratories/iot-lab).
 
 ##  Installation
 Before running ensure that the following python libraries are present in your system:
