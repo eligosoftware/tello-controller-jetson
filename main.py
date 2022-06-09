@@ -21,7 +21,7 @@ settings_data=None
 detection_object=None
 
  
-pid=[0.3,0.2,0]
+pid=[]
 pError=0
 
 move_step=0
