@@ -9,7 +9,6 @@ Before running ensure that the following python libraries are present in your sy
 - Tkinter
 - opencv
 - pillow
-New 13.06.2022
 - pyttsx3
 - espeak (Linux)
 
