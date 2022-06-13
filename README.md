@@ -9,6 +9,9 @@ Before running ensure that the following python libraries are present in your sy
 - Tkinter
 - opencv
 - pillow
+New 13.06.2022
+- pyttsx3
+- espeak (Linux)
 
 Ensure that Jetson Inference is installed and SSD-Mobilenet-V2 model downloaded. For more information see the following links:
 [https://github.com/dusty-nv/jetson-inference](https://github.com/dusty-nv/jetson-inference)<br>
@@ -46,6 +49,14 @@ conda install -c conda-forge tk
 or
 ```bash
 pip install tk
+```
+Pyttsx3
+```bash
+pip install pyttsx3
+```
+Espeak
+```bash
+sudo apt-get install espeak -y
 ```
 
 ## Running
