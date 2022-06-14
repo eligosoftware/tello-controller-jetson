@@ -14,12 +14,18 @@ from datetime import datetime
 import threading
 from time import sleep
 import pyttsx3
+import random
+task_network="Detection"
+from segnet_utils import *
+from depthnet_utils import depthBuffers
+
 
 settings_track_objects_value=None
 with_detections_value = None
 frame_resolution=None
 
 last_frame=None
+font=None
 
 recording=False
 settings_window_open=False
@@ -37,6 +43,7 @@ recording_label_text = None
 track_objects=False
 
 net = None
+cl_net = None
 path_pictures="./media/pictures/"
 path_videos="./media/videos/"
 
@@ -139,7 +146,8 @@ def settings_on_save(data):
 		else:
 			data_to_save["angle_step"]=int(data["angle_step"].get().strip())
 
-		
+		data_to_save["tasks_select"]=data["tasks_select"].get().strip()
+			
 		#print(settings_track_objects_value.get())
 		if settings_track_objects_value.get()==1:
 			data_to_save["track_objects"]=True
@@ -230,7 +238,7 @@ def onControlPanel():
 	start_video_button = tk.Button(controlWindow, text="Start Video", command=lambda: send_command("video_start"))
 	start_video_button.grid(column=3, row=4, sticky=tk.NW, padx=5, pady=5)
 	
-	with_detections_entry = tk.Checkbutton(controlWindow,text="with Detections",variable=with_detections_value,onvalue=1, offvalue=0)
+	with_detections_entry = tk.Checkbutton(controlWindow,text="with Overlay",variable=with_detections_value,onvalue=1, offvalue=0)
 	with_detections_entry.grid(column=4, row=4, sticky=tk.NW, padx=5, pady=5)
 		
 	stop_video_button = tk.Button(controlWindow, text="Stop Video", command=lambda: send_command("video_stop"))
@@ -257,6 +265,18 @@ def onSettings():
 	global settings_window_open
 	global settings_track_objects_value
 	
+	tasks_list = [
+		"Detection",
+		"Classification",
+		"Segmentation",
+		"PoseNet-Body",
+		"PoseNet-Hand",
+		"MonoDepth"
+	]
+	
+	variable_task = tk.StringVar()
+	variable_task.set(tasks_list[0])
+	
 	settings_track_objects_value = tk.IntVar()
 	
 	if not settings_window_open:
@@ -269,7 +289,7 @@ def onSettings():
 		settingsWindow.title("Settings")
 
 		# sets the geometry of toplevel
-		settingsWindow.geometry("500x350")
+		settingsWindow.geometry("500x400")
 	 
 		# A Label widget to show in toplevel
 		root.resizable(0, 0)
@@ -335,7 +355,12 @@ def onSettings():
 		track_object_entry = tk.Checkbutton(settingsWindow,text="Track Objects",variable=settings_track_objects_value,onvalue=1, offvalue=0)
 		track_object_entry.grid(column=0, row=8, sticky=tk.NW, padx=5, pady=5)
 		
-
+		tasks_select_label = tk.Label(settingsWindow, text="Task:")
+		tasks_select_label.grid(column=0, row=9, sticky=tk.NW, padx=5, pady=5)
+		
+		tasks_select_entry=tk.OptionMenu(settingsWindow,variable_task, *tasks_list)
+		tasks_select_entry.config(width=15, font=('Helvetica', 12))
+		tasks_select_entry.grid(column=1, row=9, sticky=tk.NW, padx=5, pady=5)
 		
 		entry_fields={
 			"tello_ip":tello_ip_entry,
@@ -345,7 +370,8 @@ def onSettings():
 			"d_value":d_value_entry,
 			"move_step":move_step_entry,
 			"angle_step":angle_step_entry,
-			"custom_model_path":custom_model_path_entry
+			"custom_model_path":custom_model_path_entry,
+			"tasks_select":variable_task
 			
 		}
 		custom_model_path_button=tk.Button(settingsWindow,text="Choose Dialog", command =lambda: pick_Model(entry_fields))
@@ -426,7 +452,11 @@ def onSettings():
 			else:
 				custom_model_path_entry.insert(0, "")
 			
-				
+			if "tasks_select" in settings_data:
+				variable_task.set(settings_data["tasks_select"])
+			
+			
+			
 			if "track_objects" in settings_data:
 				if settings_data["track_objects"]:
 					track_object_entry.select()
@@ -530,16 +560,20 @@ def take_picture():
 	global drone
 	global path_pictures
 	global with_detections_value
+	global last_frame
 	
-	while drone.read_frame() is not None:
-		frame=drone.read_frame()
-		if with_detections_value.get() == 1:
-			cuda_image=jetson.utils.cudaFromNumpy(frame)
-			detections = net.Detect(cuda_image)
-			frame=jetson.utils.cudaToNumpy(cuda_image)
-		write_image(path_pictures,frame)
-		messagebox.showinfo('Jetson Tools', 'Took image!')
-		break
+	if with_detections_value.get() == 1:
+		while last_frame is not None:
+			
+			write_image(path_pictures,last_frame)
+			messagebox.showinfo('Jetson Tools', 'Took image!')
+			break
+	else:
+		while drone.read_frame() is not None:
+			
+			write_image(path_pictures,drone.read_frame())
+			messagebox.showinfo('Jetson Tools', 'Took image!')
+			break
 
 def start_video():
 	global recording
@@ -557,7 +591,12 @@ def record_frames():
 	
 	now = datetime.now() # current date and time
 	video_file='video_'+now.strftime("%Y%d%m%H%M%S")+'.avi'
-	out = cv2.VideoWriter(path_videos+video_file,cv2.VideoWriter_fourcc(*'DIVX'),30,frame_resolution)
+	if with_detections_value.get() == 1:
+		w,h,c=last_frame.shape
+		
+		out = cv2.VideoWriter(path_videos+video_file,cv2.VideoWriter_fourcc(*'DIVX'),30,(h,w))
+	else:
+		out = cv2.VideoWriter(path_videos+video_file,cv2.VideoWriter_fourcc(*'DIVX'),30,frame_resolution)
 	if with_detections_value.get() == 0:
 		
 		while drone.read_frame() is not None:
@@ -599,6 +638,36 @@ def switch_camera():
 	drone.send_command("downvision "+str(direction%2))
 
 # main window function
+def get_random_phrase(found_object):
+	phrases=[
+		f"I think, I've found {found_object}",
+		f"Maybe, this is {found_object}",
+		f"Ooh, looks like this is {found_object}",
+		f"Do you show me {found_object}?",
+		f"Am I wrong or this is {found_object}?",
+	]
+	
+	return random.choice(phrases)
+	
+def classify():
+	global cl_net
+	
+	while drone.read_frame() is not None:
+		frame=drone.read_frame()
+		cuda_image=jetson.utils.cudaFromNumpy(frame)
+		
+		
+		try:
+			class_id, confidence = cl_net.Classify(cuda_image)
+			# find the object description
+			class_desc = cl_net.GetClassDesc(class_id)
+			
+			speak(get_random_phrase(class_desc))
+		except:
+			speak("Unfortunately, I couldn't find anything!")
+		break
+
+
 def main():
 	global pid
 	global lmain
@@ -610,6 +679,10 @@ def main():
 	global angle_step
 	global net
 	global track_objects
+	global cl_net
+	global task_network
+	global font
+	
 	
 	model_path=""
 	try:
@@ -627,8 +700,15 @@ def main():
 				model_path = settings_data["custom_model_path"]
 			else:
 				model_path=""				
-				
+			
+			if "tasks_select" in settings_data:
+				task_network = settings_data["tasks_select"]
+			else:
+				task_network="Detection"
+			
 			track_objects=settings_data["track_objects"]
+			if not task_network=="Detection":
+				track_objects=False
 	except Exception as e:
 		print(e)
 		res=False
@@ -649,6 +729,13 @@ def main():
 
 	
 	menubar.add_cascade(label="File", menu=filemenu)
+	
+	tasksmenu = tk.Menu(menubar)
+	tasksmenu.add_command(label="Classify",command=classify)
+
+	
+	menubar.add_cascade(label="Tasks", menu=tasksmenu)
+	
 	
 	root.config(menu=menubar)
 	
@@ -671,13 +758,29 @@ def main():
 			tello_status.config(fg="green")
 			tello_status['text']="Tello connected"
 			
-			if model_path=="":
-				net = jetson.inference.detectNet("ssd-mobilenet-v2")
-			else:
-				net = jetson.inference.detectNet(argv=['--model='+model_path+'/ssd-mobilenet.onnx','--labels='+model_path+'/labels.txt', '--input-blob=input_0', '--output-cvg=scores','--output-bbox=boxes'])
+			if task_network=="Detection":
+				if model_path=="":
+					net = jetson.inference.detectNet("ssd-mobilenet-v2")
+				else:
+					net = jetson.inference.detectNet(argv=['--model='+model_path+'/ssd-mobilenet.onnx','--labels='+model_path+'/labels.txt', '--input-blob=input_0', '--output-cvg=scores','--output-bbox=boxes'])
+			
+			elif task_network=="Segmentation":
+				alpha=150
+				net = jetson.inference.segNet("fcn-resnet18-voc")
+				net.SetOverlayAlpha(alpha)
+			elif task_network=="PoseNet-Body":
+				net = jetson.inference.poseNet("resnet18-body")
+			elif task_network=="PoseNet-Hand":
+				net = jetson.inference.poseNet("resnet18-hand")
+			elif task_network=="MonoDepth":
+				net = jetson.inference.depthNet("fcn-mobilenet")
+			elif task_network=="Classification":
+				net = jetson.inference.imageNet("googlenet")
+				font = jetson.utils.cudaFont()
+			
 			video_stream()
 	
-	
+	cl_net = jetson.inference.imageNet("googlenet")
 	
 	img2 = tk.PhotoImage(file='./assets/logo2.png')
 	root.tk.call('wm', 'iconphoto', root._w, img2)
@@ -696,33 +799,129 @@ def video_stream():
 	global net
 	global track_objects
 	global last_frame
+	global task_network
+	global font
 	
 	if drone.read_frame() is not None:
 		frame = drone.read_frame()
 		#print(frame.shape)
 		cuda_image=jetson.utils.cudaFromNumpy(frame)
 		
-		detections = net.Detect(cuda_image)
-		if track_objects:
-			objectsListC = []
-			objectsArea = []
-			
-			
-			for detection in detections:
-				cl_name=net.GetClassDesc(detection.ClassID)
-				center=detection.Center
+		if task_network=="Detection":
+			detections = net.Detect(cuda_image)
+			if track_objects:
+				objectsListC = []
+				objectsArea = []
 				
-				if (cl_name==detection_object):
-					objectsListC.append(detection.Center)
-					objectsArea.append(detection.Area)
+				
+				for detection in detections:
+					cl_name=net.GetClassDesc(detection.ClassID)
+					center=detection.Center
+					
+					if (cl_name==detection_object):
+						objectsListC.append(detection.Center)
+						objectsArea.append(detection.Area)
+				
+				if len(objectsArea) != 0:
+					i = objectsArea.index(max(objectsArea))
+					pError = trackPerson(drone, objectsListC[i],720, pid, pError)
+				else:
+					pError=0
+					drone.joystick_control(0,0,0,0)
+					
+		elif task_network=="Segmentation":
 			
-			if len(objectsArea) != 0:
-				i = objectsArea.index(max(objectsArea))
-				pError = trackPerson(drone, objectsListC[i],720, pid, pError)
-			else:
-				pError=0
-				drone.joystick_control(0,0,0,0)
+			filter_mode="linear"
+			visualize="overlay,mask"
+			stats=False			
+			
+			# create buffer manager
+			buffers = segmentationBuffers(net, stats,visualize)
+			
+			# allocate buffers for this size image
+			buffers.Alloc(cuda_image.shape, cuda_image.format)
+			
+			
+			net.Process(cuda_image)
+			
+			# generate the overlay
+			if buffers.overlay:
+				net.Overlay(buffers.overlay, filter_mode=filter_mode)
+
+			# generate the mask
+			if buffers.mask:
+				net.Mask(buffers.mask, filter_mode=filter_mode)
+
+			# composite the images
+			if buffers.composite:
+				jetson.utils.cudaOverlay(buffers.overlay, buffers.composite, 0, 0)
+				jetson.utils.cudaOverlay(buffers.mask, buffers.composite, buffers.overlay.width, 0)
+			
+			cuda_image=buffers.output
+			
+		elif task_network=="PoseNet-Body" or task_network=="PoseNet-Hand":
+			
+						
+			
+			net.Process(cuda_image)
+			
 		
+		elif task_network=="Segmentation":
+			
+			filter_mode="linear"
+			visualize="overlay,mask"
+			stats=False			
+			
+			# create buffer manager
+			buffers = segmentationBuffers(net, stats,visualize)
+			
+			# allocate buffers for this size image
+			buffers.Alloc(cuda_image.shape, cuda_image.format)
+			
+			
+			net.Process(cuda_image)
+			
+			# generate the overlay
+			if buffers.overlay:
+				net.Overlay(buffers.overlay, filter_mode=filter_mode)
+
+			# generate the mask
+			if buffers.mask:
+				net.Mask(buffers.mask, filter_mode=filter_mode)
+
+			# composite the images
+			if buffers.composite:
+				jetson.utils.cudaOverlay(buffers.overlay, buffers.composite, 0, 0)
+				jetson.utils.cudaOverlay(buffers.mask, buffers.composite, buffers.overlay.width, 0)
+			
+			cuda_image=buffers.output
+			
+		elif task_network=="MonoDepth":
+			visualize="input,depth"
+			buffers = depthBuffers(visualize)
+			# allocate buffers for this size image
+			buffers.Alloc(cuda_image.shape, cuda_image.format)
+			
+			
+			net.Process(cuda_image,buffers.depth, "viridis-inverted", "linear")
+			
+			 # composite the images
+			if buffers.use_input:
+				jetson.utils.cudaOverlay(cuda_image, buffers.composite, 0, 0)
+				
+			if buffers.use_depth:
+				jetson.utils.cudaOverlay(buffers.depth, buffers.composite, cuda_image.width if buffers.use_input else 0, 0)
+			
+			cuda_image=buffers.composite
+		
+		elif task_network=="Classification":
+			# classify the image
+			class_id, confidence = net.Classify(cuda_image)
+
+			# find the object description
+			class_desc = net.GetClassDesc(class_id)
+			
+			font.OverlayText(cuda_image, cuda_image.width, cuda_image.height, "{:05.2f}% {:s}".format(confidence * 100, class_desc), 5, 5, font.White, font.Gray40)
 			
 		frame_2=jetson.utils.cudaToNumpy(cuda_image)
 		last_frame=frame_2
