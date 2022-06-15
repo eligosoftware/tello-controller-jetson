@@ -27,6 +27,9 @@ frame_resolution=None
 last_frame=None
 font=None
 
+drone_is_up=False
+buffers=None
+
 recording=False
 settings_window_open=False
 settingsWindow=None
@@ -488,6 +491,7 @@ def pick_Model(entry_fields):
 # signal, in case of missing detection), and returns new error value back to calling thread
 def trackPerson(myDrone, center, w, pid,pError):
 	global drone
+	global drone_is_up
 	# calculate new PID error based on the center x value of detected Person and the center of image
 	error=center[0] -w//2
 	speed=pid[0]*error+pid[2]*(error-pError)
@@ -496,13 +500,13 @@ def trackPerson(myDrone, center, w, pid,pError):
 	# if there is a detection, value of center is different from 0
 	if center[0]==0:
 		error=0
-	send_command_js(speed)
-	# return error for the next iteration
+	if drone_is_up:
+		send_command_js(speed)
+		# return error for the next iteration
 	return error
 
 def send_command_js(yaw):
 	global drone
-
 	drone.joystick_control(0,0,0,0)
 	drone.joystick_control(0,0,yaw,0)
 
@@ -511,13 +515,16 @@ def send_command(command):
 	global drone
 	global move_step
 	global angle_step
+	global drone_is_up
 	
 	if (command=="takeoff"):
 		speak("Taking off")
 		drone.takeoff()
+		drone_is_up=True
 	elif (command=="land"):
 		speak("Landing")
 		drone.land()
+		drone_is_up=False
 	elif (command=="up"):
 		drone.move_up(move_step)
 	elif (command=="down"):
@@ -682,6 +689,7 @@ def main():
 	global cl_net
 	global task_network
 	global font
+	global buffers
 	
 	
 	model_path=""
@@ -768,12 +776,17 @@ def main():
 				alpha=150
 				net = jetson.inference.segNet("fcn-resnet18-voc")
 				net.SetOverlayAlpha(alpha)
+				visualize="overlay,mask"
+				stats=False
+				buffers = segmentationBuffers(net, stats,visualize)
 			elif task_network=="PoseNet-Body":
 				net = jetson.inference.poseNet("resnet18-body")
 			elif task_network=="PoseNet-Hand":
 				net = jetson.inference.poseNet("resnet18-hand")
 			elif task_network=="MonoDepth":
 				net = jetson.inference.depthNet("fcn-mobilenet")
+				visualize="input,depth"
+				buffers = depthBuffers(visualize)
 			elif task_network=="Classification":
 				net = jetson.inference.imageNet("googlenet")
 				font = jetson.utils.cudaFont()
@@ -801,6 +814,8 @@ def video_stream():
 	global last_frame
 	global task_network
 	global font
+	global drone_is_up
+	global buffers
 	
 	if drone.read_frame() is not None:
 		frame = drone.read_frame()
@@ -827,16 +842,12 @@ def video_stream():
 					pError = trackPerson(drone, objectsListC[i],720, pid, pError)
 				else:
 					pError=0
-					drone.joystick_control(0,0,0,0)
+					if drone_is_up:
+						drone.joystick_control(0,0,0,0)
 					
 		elif task_network=="Segmentation":
 			
-			filter_mode="linear"
-			visualize="overlay,mask"
-			stats=False			
-			
-			# create buffer manager
-			buffers = segmentationBuffers(net, stats,visualize)
+			filter_mode="linear"		
 			
 			# allocate buffers for this size image
 			buffers.Alloc(cuda_image.shape, cuda_image.format)
@@ -866,39 +877,9 @@ def video_stream():
 			net.Process(cuda_image)
 			
 		
-		elif task_network=="Segmentation":
-			
-			filter_mode="linear"
-			visualize="overlay,mask"
-			stats=False			
-			
-			# create buffer manager
-			buffers = segmentationBuffers(net, stats,visualize)
-			
-			# allocate buffers for this size image
-			buffers.Alloc(cuda_image.shape, cuda_image.format)
-			
-			
-			net.Process(cuda_image)
-			
-			# generate the overlay
-			if buffers.overlay:
-				net.Overlay(buffers.overlay, filter_mode=filter_mode)
-
-			# generate the mask
-			if buffers.mask:
-				net.Mask(buffers.mask, filter_mode=filter_mode)
-
-			# composite the images
-			if buffers.composite:
-				jetson.utils.cudaOverlay(buffers.overlay, buffers.composite, 0, 0)
-				jetson.utils.cudaOverlay(buffers.mask, buffers.composite, buffers.overlay.width, 0)
-			
-			cuda_image=buffers.output
 			
 		elif task_network=="MonoDepth":
-			visualize="input,depth"
-			buffers = depthBuffers(visualize)
+			
 			# allocate buffers for this size image
 			buffers.Alloc(cuda_image.shape, cuda_image.format)
 			
