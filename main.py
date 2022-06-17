@@ -23,6 +23,7 @@ from depthnet_utils import depthBuffers
 settings_track_objects_value=None
 with_detections_value = None
 frame_resolution=None
+upd_bat_level=False
 
 last_frame=None
 font=None
@@ -71,6 +72,12 @@ def on_settings_closing():
 	global settings_window_open
 	settings_window_open=False
 	settingsWindow.destroy()
+	
+def on_root_closing():
+	global root
+	global upd_bat_level
+	upd_bat_level=False
+	root.destroy()
 	
 	
 def read_settings():
@@ -510,12 +517,19 @@ def send_command_js(yaw):
 	drone.joystick_control(0,0,0,0)
 	drone.joystick_control(0,0,yaw,0)
 
+def dummy_joystick_command():
+	global drone
+	global drone_is_up
+	if drone_is_up:
+		drone.joystick_control(0,0,0,0)
 		
 def send_command(command):
 	global drone
 	global move_step
 	global angle_step
 	global drone_is_up
+	
+	dummy_joystick_command()
 	
 	if (command=="takeoff"):
 		speak("Taking off")
@@ -675,6 +689,16 @@ def classify():
 		break
 
 
+def update_battery():	
+	global drone
+	global tello_status
+	global upd_bat_level
+	while upd_bat_level:
+		bat_level=drone.get_battery()
+		tello_status['text']=f'Tello connected. Battery level {bat_level}'
+		sleep(5)
+	
+	
 def main():
 	global pid
 	global lmain
@@ -690,7 +714,7 @@ def main():
 	global task_network
 	global font
 	global buffers
-	
+	global upd_bat_level
 	
 	model_path=""
 	try:
@@ -764,7 +788,10 @@ def main():
 		else:
 			
 			tello_status.config(fg="green")
-			tello_status['text']="Tello connected"
+			bat_level=drone.get_battery()
+			tello_status['text']=f'Tello connected. Battery level {bat_level}'
+			upd_bat_level=True
+			threading.Thread(target=update_battery).start()
 			
 			if task_network=="Detection":
 				if model_path=="":
@@ -799,8 +826,10 @@ def main():
 	root.tk.call('wm', 'iconphoto', root._w, img2)
 	
 	create_media_folder()
+	root.protocol("WM_DELETE_WINDOW", on_root_closing)
 	root.mainloop()
-
+	
+	
 
 # function for video streaming
 def video_stream():
