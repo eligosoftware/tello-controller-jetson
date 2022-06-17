@@ -11,6 +11,7 @@ Before running ensure that the following python libraries are present in your sy
 - pillow
 - pyttsx3
 - espeak (Linux)
+- psutil
 
 Ensure that Jetson Inference is installed and SSD-Mobilenet-V2 model downloaded. For more information see the following links:
 [https://github.com/dusty-nv/jetson-inference](https://github.com/dusty-nv/jetson-inference)<br>
@@ -56,6 +57,10 @@ pip install pyttsx3
 Espeak
 ```bash
 sudo apt-get install espeak -y
+```
+Psutil
+```bash
+pip install psutil
 ```
 
 ## Running
