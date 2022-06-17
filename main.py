@@ -2,7 +2,7 @@ import tkinter as tk
 import json
 from tello import Tello
 from os.path import exists
-from os import makedirs
+from os import makedirs, close
 from PIL import ImageTk, Image
 import cv2
 import jetson.inference
@@ -18,7 +18,9 @@ import random
 task_network="Detection"
 from segnet_utils import *
 from depthnet_utils import depthBuffers
-
+import sys
+import os
+import psutil
 
 settings_track_objects_value=None
 with_detections_value = None
@@ -396,6 +398,8 @@ def onSettings():
 		save_button = tk.Button(settingsWindow, text="Save", command=lambda: settings_on_save(entry_fields))
 		save_button.grid(column=1, row=10, sticky=tk.NW, padx=5, pady=5)
 		
+		restart_button = tk.Button(settingsWindow, text="Restart", command=onRestart)
+		restart_button.grid(column=2, row=10, sticky=tk.NW, padx=5, pady=5)
 		
 		settings_read=read_settings()
 		
@@ -698,6 +702,23 @@ def update_battery():
 		tello_status['text']=f'Tello connected. Battery level {bat_level}'
 		sleep(5)
 	
+def onRestart():
+	global root
+	global drone_is_up
+	root.destroy()
+	
+	try:
+		p = psutil.Process(os.getpid())
+		for handler in p.get_open_files() + p.connections():
+			os.close(handler.fd)
+	except Exception as e:
+		print(e)
+	python = sys.executable
+	if drone_is_up:
+		dr_up="1"
+	else:
+		dr_up="0"
+	os.execl(python, python, "main.py", dr_up)
 	
 def main():
 	global pid
@@ -744,6 +765,7 @@ def main():
 	except Exception as e:
 		print(e)
 		res=False
+	
 			
 	connection_screen.destroy()
 	
@@ -757,6 +779,7 @@ def main():
 	filemenu = tk.Menu(menubar)
 	filemenu.add_command(label="Control panel",command=onControlPanel)
 	filemenu.add_command(label="Settings",command=onSettings)
+	filemenu.add_command(label="Restart",command=onRestart)
 	filemenu.add_command(label="Exit", command=root.destroy)
 
 	
@@ -851,7 +874,9 @@ def video_stream():
 		#print(frame.shape)
 		cuda_image=jetson.utils.cudaFromNumpy(frame)
 		
+			
 		if task_network=="Detection":
+		
 			detections = net.Detect(cuda_image)
 			if track_objects:
 				objectsListC = []
@@ -942,6 +967,13 @@ def video_stream():
 		lmain.imgtk = imgtk
 		lmain.configure(image=imgtk)
 	lmain.after(1, video_stream) 
+	
+print(sys.argv)
+
+if len(sys.argv) > 1:
+	dr_up_arg=int(sys.argv[1])
+	if dr_up_arg==1:
+		drone_is_up=True
 
 connection_screen = tk.Tk()
 
@@ -969,3 +1001,5 @@ connection_screen.after(1000,main)
  
 # Execute tkinter
 tk.mainloop()
+
+
