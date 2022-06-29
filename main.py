@@ -25,6 +25,7 @@ import psutil
 settings_track_objects_value=None
 with_detections_value = None
 frame_resolution=None
+fps=None
 upd_bat_level=False
 
 last_frame=None
@@ -47,6 +48,8 @@ detection_object=None
 recording_label=None
 recording_label_text = None
 track_objects=False
+
+imgbox=None
 
 net = None
 cl_net = None
@@ -101,6 +104,7 @@ def connect_to_tello(tello_ip_value):
 	
 	global drone
 	global frame_resolution
+	global fps
 	res = False
 	try:
 		if (tello_ip_value=="192.168.10.1"):
@@ -114,6 +118,7 @@ def connect_to_tello(tello_ip_value):
 			drone.connect()
 			drone.stream_on()
 			frame_resolution=(960,720)
+			fps=10
 			drone.send_command("downvision 0")
 		
 	except:
@@ -613,28 +618,29 @@ def record_frames():
 	global with_detections_value
 	global last_frame
 	global frame_resolution
+	global fps
 	
 	now = datetime.now() # current date and time
 	video_file='video_'+now.strftime("%Y%d%m%H%M%S")+'.avi'
 	if with_detections_value.get() == 1:
 		w,h,c=last_frame.shape
 		
-		out = cv2.VideoWriter(path_videos+video_file,cv2.VideoWriter_fourcc(*'DIVX'),30,(h,w))
+		out = cv2.VideoWriter(path_videos+video_file,cv2.VideoWriter_fourcc(*'DIVX'),fps,(h,w))
 	else:
-		out = cv2.VideoWriter(path_videos+video_file,cv2.VideoWriter_fourcc(*'DIVX'),30,frame_resolution)
+		out = cv2.VideoWriter(path_videos+video_file,cv2.VideoWriter_fourcc(*'DIVX'),fps,frame_resolution)
 	if with_detections_value.get() == 0:
 		
 		while drone.read_frame() is not None:
 			frame=drone.read_frame()
 			out.write(frame)
-			sleep(0.01)
+			#sleep(0.01)
 			if not recording:
 				out.release()
 				break
 	else:
 		while last_frame is not None:
 			out.write(last_frame)
-			sleep(0.01)
+			#sleep(0.04)
 			if not recording:
 				out.release()
 				break
@@ -655,11 +661,14 @@ def switch_camera():
 	global direction
 	global drone
 	global frame_resolution
+	global fps
 	direction+=1
 	if direction%2 ==0:
 		frame_resolution=(960,720)
+		fps=10
 	else:
 		frame_resolution=(320,240)
+		fps=30
 	drone.send_command("downvision "+str(direction%2))
 
 # main window function
@@ -723,6 +732,7 @@ def onRestart():
 def main():
 	global pid
 	global lmain
+	global imgbox
 	global root
 	global tello_status
 	global drone
@@ -771,8 +781,10 @@ def main():
 	
 	root = tk.Tk()
 	root.title('Jetson Tools')
-	
-	root.geometry('960x720')
+	root.attributes('-fullscreen', 1)
+
+	#root.geometry('960x720')
+
 	
 	menubar = tk.Menu(root)
 
@@ -794,20 +806,23 @@ def main():
 	
 	root.config(menu=menubar)
 	
+	root.grid_columnconfigure(0, weight=1)
 	# Tello Status
 	tello_status = tk.Label(root, fg="green", text="")
-	tello_status.grid(column=0, row=0, sticky=tk.NW, padx=5, pady=5)
+	#tello_status.grid(column=0, row=0, sticky=tk.NW, padx=5, pady=5)
+	tello_status.pack()	
+	lmain = tk.Canvas(root, highlightthickness=0)
+	lmain.pack(fill=tk.BOTH, expand=1)	
+	imgbox = lmain.create_image(277, 156, image=None, anchor='nw')
+
 		
-	lmain = tk.Label(root)
-	lmain.grid(row=1, column=0, sticky=tk.NW, padx=5, pady=5)
-	
 	if not settings_read:
 		tello_status.config(fg="red")
 		tello_status['text']="Check settings"
 	else:
 		if res == False:
 			tello_status.config(fg="red")
-			tello_status['text']="Tello is not connected"
+			tello_status['text']="Tello is not connected"		
 		else:
 			
 			tello_status.config(fg="green")
@@ -856,6 +871,7 @@ def main():
 
 # function for video streaming
 def video_stream():
+	global root
 	global pError, pError_fb
 	global lmain
 	global pid
@@ -868,6 +884,7 @@ def video_stream():
 	global font
 	global drone_is_up
 	global buffers
+	global imgbox
 	
 	if drone.read_frame() is not None:
 		frame = drone.read_frame()
@@ -962,13 +979,21 @@ def video_stream():
 		last_frame=frame_2
 		
 		cv2image = cv2.cvtColor(frame_2, cv2.COLOR_BGR2RGBA)
+		#w, h = root.winfo_screenwidth(), root.winfo_screenheight()
+		w, h = 1366, 768
+		#print((w,h))
+		#cv2image=cv2.resize(cv2image,(w,h))
+		#print(cv2image.shape)
 		img = Image.fromarray(cv2image)
-		imgtk = ImageTk.PhotoImage(image=img)
-		lmain.imgtk = imgtk
-		lmain.configure(image=imgtk)
+		image = ImageTk.PhotoImage(image=img.resize((w,h)))
+		lmain.itemconfig(imgbox, image=image)
+		#lmain.imgtk = imgtk
+		lmain.image = image
+
+		#lmain.configure(image=imgtk)
 	lmain.after(1, video_stream) 
 	
-print(sys.argv)
+#print(sys.argv)
 
 if len(sys.argv) > 1:
 	dr_up_arg=int(sys.argv[1])
